@@ -7,4 +7,4 @@ tensorboardX==2.1
 sklearn
 pgmpy==0.1.11
 dgl==0.4.2
-pytorch
+torch
