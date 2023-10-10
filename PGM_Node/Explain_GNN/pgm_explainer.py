@@ -14,23 +14,14 @@ from scipy import stats
 
 
 class Node_Explainer:
-    def __init__(
-        self,
-        model,
-        A,
-        X,
-        ori_pred,
-        num_layers,
-        mode = 0,
-        print_result = 1
-    ):
+    def __init__(self, model, A, X, ori_pred, num_layers, mode = 0, print_result = 1):
         self.model = model
         self.model.eval()
-        self.A = A
-        self.X = X
+        self.A = A  # Adjacency matrix
+        self.X = X  # Feature matrix
         self.ori_pred = ori_pred
         self.num_layers = num_layers
-        self.mode = mode
+        self.mode = mode    # Perturbation mode
         self.print_result = print_result
         print("Explainer settings")
         print("\\ A dim: ", self.A.shape)
@@ -40,18 +31,34 @@ class Node_Explainer:
         print("\\ Print result: ", self.print_result)
     
     def n_hops_A(self, n_hops):
-        # Compute the n-hops adjacency matrix
+        """Compute the n-hops adjacency matrix
+        (We want H = A + A^2 + ... + A^(n_hops))
+
+        Args:
+            n_hops (int): Number of hops
+
+        Returns:
+            numpy matrix: The n-hop adjacency matrix
+        """
         adj = torch.tensor(self.A, dtype=torch.float)
         hop_adj = power_adj = adj
         for i in range(n_hops - 1):
             power_adj = power_adj @ adj
-            prev_hop_adj = hop_adj
             hop_adj = hop_adj + power_adj
             hop_adj = (hop_adj > 0).float()
         return hop_adj.numpy().astype(int)
     
     def extract_n_hops_neighbors(self, nA, node_idx):
-        # Return the n-hops neighbors of a node
+        """Return the n-hops neighbors of a node
+
+        Args:
+            nA (numpy array): The n-hop adjacency matrix
+            node_idx (int): Index of node whose n-hope neighbors are to be found
+
+        Returns:
+            int, numpy array, numpy array, numpy array: The new index, the n-hop neighbors list and their feature matrix along with
+            adjacency matrix of the vertex induced subgraph
+        """
         node_nA_row = nA[node_idx]
         neighbors = np.nonzero(node_nA_row)[0]
         node_idx_new = sum(node_nA_row[:node_idx])
@@ -60,10 +67,18 @@ class Node_Explainer:
         return node_idx_new, sub_A, sub_X, neighbors
     
     def perturb_features_on_node(self,feature_matrix, node_idx, random = 0, mode = 0):
-        # return a random perturbed feature matrix
-        # random = 0 for nothing, 1 for random.
-        # mode = 0 for random 0-1, 1 for scaling with original feature
-        
+        """Generate a random perturbed feature matrix
+
+        Args:
+            feature_matrix (numpy array): Initial feature matrix to be perturbed
+            node_idx (int): Index of the node whose features is to be perturbed
+            random (int, optional): If set to 0 then no perturbation, if set to 1 then random values. Defaults to 0.
+            mode (int, optional): If set to 0 then perturbation assigns just 0-1 values, if set to 1 then perturbation picks random numbers from uniform distribution
+            in range [0,2] and scales it by current feature values. Defaults to 0.
+
+        Returns:
+            numpy array: Feature matrix with the feature vector at index "node_idx" perturbed
+        """        
         X_perturb = feature_matrix
         if mode == 0:
             if random == 0:
@@ -81,18 +96,33 @@ class Node_Explainer:
     
     
     def explain(self, node_idx, num_samples = 100, top_node = None, p_threshold = 0.05, pred_threshold = 0.1):
+        """Function to generate explanation
+
+        Args:
+            node_idx (int): Index of the node whose label is to be explained
+            num_samples (int, optional): _description_. Defaults to 100.
+            top_node (_type_, optional): _description_. Defaults to None.
+            p_threshold (float, optional): p-value threshold beyond which hypothesis will be rejected. Defaults to 0.05.
+            pred_threshold (float, optional): _description_. Defaults to 0.1.
+
+        Returns:
+            _type_: _description_
+        """
         print("Explaining node: " + str(node_idx))
         nA = self.n_hops_A(self.num_layers)
         node_idx_new, sub_A, sub_X, neighbors = self.extract_n_hops_neighbors(nA,node_idx)
         
+        # Including the node itself into the n-hop neighborhood
         if (node_idx not in neighbors):
             neighbors = np.append(neighbors, node_idx)
         
+        # Forward pass
         X_torch = torch.tensor([self.X], dtype=torch.float)
         A_torch = torch.tensor([self.A], dtype=torch.float)
         pred_torch, _ = self.model.forward(X_torch, A_torch)
         soft_pred = np.asarray([softmax(np.asarray(pred_torch[0][node_].data)) for node_ in range(self.X.shape[0])])
         
+        # Getting prediction of that specific node
         pred_node = np.asarray(pred_torch[0][node_idx].data)
         label_node = np.argmax(pred_node)
         soft_pred_node = softmax(pred_node)
@@ -113,6 +143,7 @@ class Node_Explainer:
                     latent = 0
                 sample.append(latent)
             
+            # Forward pass after possible perturbation
             X_perturb_torch =  torch.tensor([X_perturb], dtype=torch.float)
             pred_perturb_torch, _ = self.model.forward(X_perturb_torch, A_torch)
             soft_pred_perturb = np.asarray([softmax(np.asarray(pred_perturb_torch[0][node_].data)) for node_ in range(self.X.shape[0])])
