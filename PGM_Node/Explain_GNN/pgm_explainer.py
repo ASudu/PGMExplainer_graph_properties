@@ -96,17 +96,17 @@ class Node_Explainer:
     
     
     def explain(self, node_idx, num_samples = 100, top_node = None, p_threshold = 0.05, pred_threshold = 0.1):
-        """Function to generate explanation
+        """Function to generate explanation for a single node
 
         Args:
             node_idx (int): Index of the node whose label is to be explained
-            num_samples (int, optional): _description_. Defaults to 100.
-            top_node (_type_, optional): _description_. Defaults to None.
+            num_samples (int, optional): Defaults to 100.
+            top_node (int, optional): Defaults to None.
             p_threshold (float, optional): p-value threshold beyond which hypothesis will be rejected. Defaults to 0.05.
-            pred_threshold (float, optional): _description_. Defaults to 0.1.
+            pred_threshold (float, optional): Defaults to 0.1.
 
         Returns:
-            _type_: _description_
+            List, DataFrame, Dictionary: Returns the node in the PGM along with the data on sample and p-values of the neighbors
         """
         print("Explaining node: " + str(node_idx))
         nA = self.n_hops_A(self.num_layers)
@@ -148,6 +148,7 @@ class Node_Explainer:
             pred_perturb_torch, _ = self.model.forward(X_perturb_torch, A_torch)
             soft_pred_perturb = np.asarray([softmax(np.asarray(pred_perturb_torch[0][node_].data)) for node_ in range(self.X.shape[0])])
 
+            # Which samples to include in the explanation
             sample_bool = []
             for node in neighbors:
                 if (soft_pred_perturb[node,np.argmax(soft_pred[node])] + pred_threshold) < np.max(soft_pred[node]):
@@ -176,6 +177,8 @@ class Node_Explainer:
 
             chi2, p = chi_square(ind_ori_to_sub[node], ind_ori_to_sub[node_idx], [], data)
             p_values.append(p)
+
+            # If higher confidence (p < p_threshold since confidence is proportional to (1-p))
             if p < p_threshold:
                 dependent_neighbors.append(node)
                 dependent_neighbors_p_values.append(p)
@@ -197,17 +200,35 @@ class Node_Explainer:
 
 
     def explain_range(self, node_list, num_samples = 1000, top_node = None, p_threshold = 0.05, pred_threshold = 0.1):
+        """Function to generate explanation for a set of nodes
+
+        Args:
+            node_list (List): List of nodes whose label is to be explained
+            num_samples (int, optional): Defaults to 100.
+            top_node (int, optional): Defaults to None.
+            p_threshold (float, optional): p-value threshold beyond which hypothesis will be rejected. Defaults to 0.05.
+            pred_threshold (float, optional): Defaults to 0.1.
+
+        Returns:
+            Dictionary: Dictionary containing the details of explanation for each node in the target list
+        """
+        # n-hop adjacency matrix (path matrix for path of length <= n)
         nA = self.n_hops_A(self.num_layers)
         
         neighbors_list = {}
         all_neighbors = []
         for node in node_list:
             _,_,_,neighbors = self.extract_n_hops_neighbors(nA,node)
+
+            # Include path length = 0 node
             if (node not in neighbors):
                 neighbors = np.append(neighbors, node)
+
+            # Update the data structures
             neighbors_list[node] = neighbors
             all_neighbors = list(set(all_neighbors)| set(np.append(neighbors, node)))
-            
+
+        # Forward pass  
         X_torch = torch.tensor([self.X], dtype=torch.float)
         A_torch = torch.tensor([self.A], dtype=torch.float)
         pred_torch, _ = self.model.forward(X_torch, A_torch)
@@ -229,6 +250,7 @@ class Node_Explainer:
                     latent = 0
                 sample.append(latent)
             
+            # Forward pass after possible perturbation
             X_perturb_torch =  torch.tensor([X_perturb], dtype=torch.float)
             pred_perturb_torch, _ = self.model.forward(X_perturb_torch, A_torch)
             soft_pred_perturb = np.asarray([softmax(np.asarray(pred_perturb_torch[0][node_].data)) for node_ in range(self.X.shape[0])])
@@ -431,6 +453,7 @@ class Node_Explainer:
         subnodes_no_target = [node for node in subnodes if node != target]
         data.columns = data.columns.astype(str)
         
+        # Markov Blanket
         MK_blanket = self.search_MK(data, target, subnodes_no_target.copy())
         
 
