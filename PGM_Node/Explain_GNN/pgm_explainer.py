@@ -101,7 +101,7 @@ class Node_Explainer:
         Args:
             node_idx (int): Index of the node whose label is to be explained
             num_samples (int, optional): Defaults to 100.
-            top_node (int, optional): Defaults to None.
+            top_node (int, optional): Puts an upper bound on number of nodes in the explanation. Defaults to None.
             p_threshold (float, optional): p-value threshold beyond which hypothesis will be rejected. Defaults to 0.05.
             pred_threshold (float, optional): Defaults to 0.1.
 
@@ -184,7 +184,8 @@ class Node_Explainer:
                 dependent_neighbors_p_values.append(p)
         
         pgm_stats = dict(zip(neighbors,p_values))
-  
+
+        # Restricting the size of explanation
         pgm_nodes = []
         if top_node == None:
             pgm_nodes = dependent_neighbors
