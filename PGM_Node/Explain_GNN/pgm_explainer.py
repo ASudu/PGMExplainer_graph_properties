@@ -117,7 +117,7 @@ class Node_Explainer:
             neighbors = np.append(neighbors, node_idx)
         
         # Forward pass
-        X_torch = torch.tensor([self.X], dtype=torch.float)
+        X_torch = torch.tensor(np.array([self.X]), dtype=torch.float)
         A_torch = torch.tensor([self.A], dtype=torch.float)
         pred_torch, _ = self.model.forward(X_torch, A_torch)
         soft_pred = np.asarray([softmax(np.asarray(pred_torch[0][node_].data)) for node_ in range(self.X.shape[0])])
