@@ -34,7 +34,8 @@ def net_params():
     net_params['residual'] = True
     net_params['hidden_dim'] = hidden_dim
     net_params['out_dim'] = out_dim
-    num_classes = 10
+    num_classes = 2     # for syn6
+    # num_classes = 10     # for MNIST
     net_params['n_classes'] = num_classes
     net_params['n_heads'] = n_heads
     net_params['L'] = L  # min L should be 2
